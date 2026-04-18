@@ -4,14 +4,23 @@ on:
   workflow_dispatch:
     inputs:
       device:
-        description: 'Select device to build'
+        description: 'Select device'
         required: true
         default: 'surya'
         type: choice
         options:
           - surya
-          - santoni
+          - msm8937
           - all
+      feature:
+        description: 'Select build feature'
+        required: true
+        default: 'normal'
+        type: choice
+        options:
+          - normal
+          - droidspace
+          - nethunter
 
 jobs:
   prepare:
@@ -22,13 +31,13 @@ jobs:
       - id: set-matrix
         run: |
           if [[ "${{ github.event.inputs.device }}" == "all" ]]; then
-            echo 'matrix={"include":[{"device":"surya"},{"device":"santoni"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"include":[{"device":"surya"},{"device":"msm8937"}]}' >> $GITHUB_OUTPUT
           else
             echo 'matrix={"include":[{"device":"${{ github.event.inputs.device }}"}]}' >> $GITHUB_OUTPUT
           fi
 
   build_kernel:
-    name: Build LiCIK Kernel for ${{ matrix.device }}
+    name: Build LiCIK (${{ github.event.inputs.feature }}) for ${{ matrix.device }}
     runs-on: ubuntu-latest
     needs: prepare
     strategy:
@@ -47,9 +56,9 @@ jobs:
         if [[ "${{ matrix.device }}" == "surya" ]]; then
           echo "KERNEL_URL=https://github.com/crdroidandroid/android_kernel_xiaomi_surya.git" >> $GITHUB_ENV
           echo "KERNEL_BRANCH=16.0" >> $GITHUB_ENV
-        elif [[ "${{ matrix.device }}" == "santoni" ]]; then
-          echo "KERNEL_URL=https://github.com/LineageOS/android_kernel_xiaomi_msm8937.git" >> $GITHUB_ENV
-          echo "KERNEL_BRANCH=lineage-22.2" >> $GITHUB_ENV
+        elif [[ "${{ matrix.device }}" == "msm8937" ]]; then
+          echo "KERNEL_URL=https://github.com/crdroidandroid/android_kernel_xiaomi_msm8937.git" >> $GITHUB_ENV
+          echo "KERNEL_BRANCH=13.0" >> $GITHUB_ENV
         fi
 
     - name: Install Dependencies
@@ -76,37 +85,28 @@ jobs:
         path: kernel_workspace/android/AnyKernel3
         key: ${{ runner.os }}-ak3-shinigami
 
-    - name: Apply Droidspaces Patches
+    - name: Apply Patches
       run: |
         cd kernel_workspace
-        URLS=(
-          "https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/refs/heads/main/Documentation/resources/kernel-patches/non-GKI/01.fix_kernel_panic_in_xt_qtaguid.patch"
-          "https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/refs/heads/main/Documentation/resources/kernel-patches/non-GKI/02.fix_restore%20cgroup%20file%20prefix%20handling%20.patch"
-        )
-        for url in "${URLS[@]}"; do
-          wget -q "$url"
-        done
-        for p in *.patch; do
-          echo "Applying $p..."
-          patch -p1 --forward --batch < "$p" || echo "Failed or already applied: $p"
-        done
+        if [[ "${{ github.event.inputs.feature }}" == "droidspace" ]]; then
+          echo "Applying Droidspace patches..."
+          for p in ../patches/*-droidspace.patch; do
+            echo "Applying $p..."
+            patch -p1 --forward --batch < "$p" || echo "Failed: $p"
+          done
+        fi
 
-    - name: Setup Droidspaces Configs
+    - name: Setup Configs
       run: |
         mkdir -p kernel_workspace/arch/arm64/configs/
-        cp configs/droidspaces.config kernel_workspace/arch/arm64/configs/
-        cp configs/droidspaces-additional.config kernel_workspace/arch/arm64/configs/ || true
-
-    - name: Patch Kernel Source
-      run: |
-        chmod +x patch/buildpatchCR.sh
-        ./patch/buildpatchCR.sh kernel_workspace/build.sh ${{ matrix.device }}
+        cp configs/*.config kernel_workspace/arch/arm64/configs/
 
     - name: Building
       run: |
+        cp scripts/${{ matrix.device }}.sh kernel_workspace/build.sh
         cd kernel_workspace
         chmod +x build.sh
-        ./build.sh
+        ./build.sh ${{ github.event.inputs.feature }}
 
     - name: Extract Metadata
       id: metadata
@@ -117,7 +117,6 @@ jobs:
         SUBLEVEL=$(grep "^SUBLEVEL =" Makefile | awk '{print $3}')
         EXTRAVERSION=$(grep "^EXTRAVERSION =" Makefile | awk '{print $3}')
         echo "KV=$VERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION" >> $GITHUB_OUTPUT
-        # Extract owner from URL
         OWNER=$(echo "${{ env.KERNEL_URL }}" | sed -E 's/.*github.com\/([^\/]+).*/\1/')
         echo "OWNER=$OWNER" >> $GITHUB_OUTPUT
 
@@ -128,17 +127,18 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: LiCIK-${{ matrix.device }}-${{ env.DATE }}
+        name: LiCIK-${{ matrix.device }}-${{ github.event.inputs.feature }}-${{ env.DATE }}
         path: ${{ env.ARTIFACT }}/*
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ matrix.device }}-${{ env.DATE }}
+        tag_name: ${{ matrix.device }}-${{ github.event.inputs.feature }}-${{ env.DATE }}
         files: ${{ env.ARTIFACT }}/*
         body: |
           ## LiCIK Kernel for ${{ matrix.device }}
 
+          **Feature:** ${{ github.event.inputs.feature }}
           **Author:** ${{ steps.metadata.outputs.OWNER }}
           **Kernel Source:** ${{ env.KERNEL_URL }}
           **Kernel Version:** ${{ steps.metadata.outputs.KV }}
