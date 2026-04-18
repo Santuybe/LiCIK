@@ -2,32 +2,23 @@ name: Build LiCIK Kernel surya
 
 on:
   push:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    outputs:
-      DATE: ${{ steps.setdate.outputs.DATE }}
-    steps:
-      - id: setdate
-        run: |
-          echo "DATE=$(TZ=Asia/Jakarta date +%Y%m%d%H%M)" >> $GITHUB_OUTPUT
-
   build_kernel:
     name: Build LiCIK Kernel
     runs-on: ubuntu-latest
-    needs: prepare
-    outputs:
-      KV: ${{ steps.kernel_version.outputs.KV }}
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout Workflow & Local Configs
       uses: actions/checkout@v4
 
-    - name: Set environment
+    - name: Set Variables
       run: |
-        echo "DATE=${{ needs.prepare.outputs.DATE }}" >> $GITHUB_ENV
+        echo "DATE=$(TZ=Asia/Jakarta date +%Y%m%d%H%M)" >> $GITHUB_ENV
         echo "ARTIFACT=$GITHUB_WORKSPACE/artifact" >> $GITHUB_ENV
         echo "KERNEL_URL=https://github.com/crdroidandroid/android_kernel_xiaomi_surya.git" >> $GITHUB_ENV
         echo "KERNEL_BRANCH=16.0" >> $GITHUB_ENV
@@ -35,17 +26,30 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt update
-        sudo apt install -y device-tree-compiler bc build-essential flex bison libssl-dev libelf-dev clang lld wget python3 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+        sudo apt install -y device-tree-compiler bc build-essential flex bison libssl-dev libelf-dev clang lld wget python3 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi zip
         mkdir -p ${{ env.ARTIFACT }}
 
     - name: Fetch crDroid Kernel Source
       run: |
         git clone --depth=1 -b ${{ env.KERNEL_BRANCH }} ${{ env.KERNEL_URL }} kernel_workspace
 
+    - name: Cache Toolchain
+      id: cache-toolchain
+      uses: actions/cache@v4
+      with:
+        path: kernel_workspace/tc/clang-498229
+        key: ${{ runner.os }}-toolchain-v17
+
+    - name: Cache AnyKernel3
+      id: cache-ak3
+      uses: actions/cache@v4
+      with:
+        path: kernel_workspace/android/AnyKernel3
+        key: ${{ runner.os }}-ak3-shinigami
+
     - name: Apply Droidspaces Patches
       run: |
         cd kernel_workspace
-        # Download patch non-GKI
         URLS=(
           "https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/refs/heads/main/Documentation/resources/kernel-patches/non-GKI/01.fix_kernel_panic_in_xt_qtaguid.patch"
           "https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/refs/heads/main/Documentation/resources/kernel-patches/non-GKI/02.fix_restore%20cgroup%20file%20prefix%20handling%20.patch"
@@ -53,25 +57,27 @@ jobs:
         for url in "${URLS[@]}"; do
           wget -q "$url"
         done
-        # Terapkan patch dengan p1
         for p in *.patch; do
           echo "Applying $p..."
-          patch -p1 --forward --batch < "$p" || echo "Gagal/Skip $p"
+          patch -p1 --forward --batch < "$p" || echo "Failed or already applied: $p"
         done
 
     - name: Setup Droidspaces Configs
       run: |
-        # Salin config dari folder configs/ di repo kamu ke source kernel
         mkdir -p kernel_workspace/arch/arm64/configs/
         cp configs/droidspaces.config kernel_workspace/arch/arm64/configs/
         cp configs/droidspaces-additional.config kernel_workspace/arch/arm64/configs/ || true
 
-    - name: Patch build.sh
+    - name: Patch Kernel Source
       run: |
         chmod +x patch/buildpatchCR.sh
-        # build.sh crDroid biasanya ada di root source kernel
-        chmod +x kernel_workspace/build.sh
         ./patch/buildpatchCR.sh kernel_workspace/build.sh
+
+    - name: Building
+      run: |
+        cd kernel_workspace
+        chmod +x build.sh
+        ./build.sh
 
     - name: Extract Kernel Version
       id: kernel_version
@@ -82,11 +88,7 @@ jobs:
         SUBLEVEL=$(grep "^SUBLEVEL =" Makefile | awk '{print $3}')
         EXTRAVERSION=$(grep "^EXTRAVERSION =" Makefile | awk '{print $3}')
         echo "KV=$VERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION" >> $GITHUB_OUTPUT
-
-    - name: Building
-      run: |
-        cd kernel_workspace
-        ./build.sh
+        echo "Kernel Version: $VERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION"
 
     - name: Move ZIP to Artifact
       run: |
@@ -98,30 +100,15 @@ jobs:
         name: LiCIK-surya-${{ env.DATE }}
         path: ${{ env.ARTIFACT }}/*
 
-  create_release:
-    name: Create Release
-    needs: [prepare, build_kernel]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ env.DATE }}
+        files: ${{ env.ARTIFACT }}/*
+        body: |
+          ## LiCIK Kernel for surya
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifact
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ needs.prepare.outputs.DATE }}
-          files: artifact/**/*
-          body: |
-            ## LiCIK Kernel for surya
-
-            **Author:** crdroidandroid
-            **Kernel Source:** https://github.com/crdroidandroid/android_kernel_xiaomi_surya
-            **Kernel Version:** ${{ needs.build_kernel.outputs.KV }}
-            **Build Date:** ${{ needs.prepare.outputs.DATE }}
+          **Author:** crdroidandroid
+          **Kernel Source:** ${{ env.KERNEL_URL }}
+          **Kernel Version:** ${{ steps.kernel_version.outputs.KV }}
+          **Build Date:** ${{ env.DATE }}
