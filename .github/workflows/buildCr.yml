@@ -20,7 +20,11 @@ jobs:
     needs: prepare
     strategy:
       matrix:
-        [span_2](start_span)root: ["KSU", "NoKSU"] # Hanya menggunakan opsi Root[span_2](end_span)
+        include:
+          - variant: "Tiramisu"
+            root: "KSU"
+          - variant: "SnowCone"
+            root: "NoKSU"
 
     steps:
     - name: Checkout Workflow & Local Configs
@@ -28,6 +32,7 @@ jobs:
 
     - name: Set environment
       run: |
+        echo "VARIANT=${{ matrix.variant }}" >> $GITHUB_ENV
         echo "ROOT=${{ matrix.root }}" >> $GITHUB_ENV
         echo "DATE=${{ needs.prepare.outputs.DATE }}" >> $GITHUB_ENV
         echo "ARTIFACT=$GITHUB_WORKSPACE/artifact" >> $GITHUB_ENV
@@ -47,7 +52,7 @@ jobs:
     - name: Apply Droidspaces Patches
       run: |
         cd kernel_workspace
-        # Download patch non-GKI dari repo official Droidspaces
+        # Download patch non-GKI
         URLS=(
           "https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/refs/heads/main/Documentation/resources/kernel-patches/non-GKI/01.fix_kernel_panic_in_xt_qtaguid.patch"
           "https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/refs/heads/main/Documentation/resources/kernel-patches/non-GKI/02.fix_restore%20cgroup%20file%20prefix%20handling%20.patch"
@@ -55,33 +60,33 @@ jobs:
         for url in "${URLS[@]}"; do
           wget -q "$url"
         done
-        # Terapkan patch dengan opsi -p1
+        # Terapkan patch dengan p1
         for p in *.patch; do
-          patch -p1 --forward --batch < "$p" || echo "Skip $p"
+          echo "Applying $p..."
+          patch -p1 --forward --batch < "$p" || echo "Gagal/Skip $p"
         done
 
     - name: Setup Droidspaces Configs
       run: |
-        # Salin config dari folder configs/ di repo workflow ke folder kernel
+        # Salin config dari folder configs/ di repo kamu ke source kernel
         mkdir -p kernel_workspace/arch/arm64/configs/
         cp configs/droidspaces.config kernel_workspace/arch/arm64/configs/
         cp configs/droidspaces-additional.config kernel_workspace/arch/arm64/configs/ || true
 
     - name: Patch build.sh
       run: |
-        chmod +x patch/buildpatchCR.sh
+        chmod +x patch/buildpatch.sh
+        # build.sh crDroid biasanya ada di root source kernel
         chmod +x kernel_workspace/build.sh
-        ./patch/buildpatchCR.sh kernel_workspace/build.sh
+        ./patch/buildpatch.sh kernel_workspace/build.sh
 
     - name: Building
       run: |
         cd kernel_workspace
-        # [span_3](start_span)Menjalankan build.sh tanpa argumen variant (Tiramisu/SnowCone)[span_3](end_span)
-        ./build.sh ${{ env.ROOT }} ${{ env.DATE }} ${{ env.ARTIFACT }}
+        ./build.sh ${{ env.VARIANT }} ${{ env.ROOT }} ${{ env.DATE }} ${{ env.ARTIFACT }}
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: crDroid-surya-${{ matrix.root }}-${{ env.DATE }}
+        name: crDroid-surya-${{ env.VARIANT }}-${{ env.ROOT }}-${{ env.DATE }}
         path: ${{ env.ARTIFACT }}/*
-        
