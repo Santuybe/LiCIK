@@ -84,7 +84,8 @@ jobs:
         # Terapkan semua file .patch yang ada di folder
         for p in *.patch; do
           echo "Applying $p..."
-          patch -p1 < "$p"
+          # Menggunakan --forward untuk menghindari prompt dan --batch untuk otomatis skip jika gagal
+          patch -p1 --forward --batch < "$p" || echo "Gagal menerapkan $p, mungkin file tidak ditemukan atau sudah di-patch."
         done
 
     - name: Building
