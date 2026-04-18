@@ -68,11 +68,24 @@ jobs:
         # Jalankan patcher untuk menyisipkan logika droidspaces ke build.sh
         ./root/patch/buildpatch.sh build.sh
 
-    - name: Patch Droidspaces Kernel Source
+    - name: Download and Apply All Droidspaces Patches
       run: |
         cd kernel_workspace
-        # Jalankan patch source kernel untuk droidspaces
-        curl -LSs https://raw.githubusercontent.com/Anand_More/droidspaces/main/patch.sh | bash
+        # Daftar URL patch (bisa ditambah sesuai kebutuhan)
+        URLS=(
+          "https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/main/Documentation/resources/kernel-patches/non-GKI/droidspaces.patch"
+          "https://url-patch-tambahan.com/fix.patch"
+        )
+        
+        for url in "${URLS[@]}"; do
+          wget -q "$url"
+        done
+
+        # Terapkan semua file .patch yang ada di folder
+        for p in *.patch; do
+          echo "Applying $p..."
+          patch -p1 < "$p"
+        done
 
     - name: Building
       run: |
