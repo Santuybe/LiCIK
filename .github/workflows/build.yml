@@ -64,9 +64,9 @@ jobs:
       run: |
         # Berikan izin eksekusi pada patcher dan build.sh asli
         chmod +x patch/buildpatch.sh
-        chmod +x build.sh
+        chmod +x kernel_workspace/build.sh
         # Jalankan patcher untuk menyisipkan logika droidspaces ke build.sh
-        ./patch/buildpatch.sh build.sh
+        ./patch/buildpatch.sh kernel_workspace/build.sh
 
     - name: Download and Apply All Droidspaces Patches
       run: |
@@ -90,6 +90,7 @@ jobs:
     - name: Building
       run: |
         # Eksekusi build.sh yang sudah dipatch
+        cd kernel_workspace
         ./build.sh ${{ env.VARIANT }} ${{ env.ROOT }} ${{ env.DATE }} ${{ env.ARTIFACT }}
 
     - name: Upload artifact
