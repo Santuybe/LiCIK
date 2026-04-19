@@ -57,8 +57,8 @@ jobs:
           echo "KERNEL_URL=https://github.com/crdroidandroid/android_kernel_xiaomi_surya.git" >> $GITHUB_ENV
           echo "KERNEL_BRANCH=16.0" >> $GITHUB_ENV
         elif [[ "${{ matrix.device }}" == "msm8937" ]]; then
-          echo "KERNEL_URL=https://github.com/crdroidandroid/android_kernel_xiaomi_msm8937.git" >> $GITHUB_ENV
-          echo "KERNEL_BRANCH=13.0" >> $GITHUB_ENV
+          echo "KERNEL_URL=https://github.com/LineageOS/android_kernel_xiaomi_msm8937.git" >> $GITHUB_ENV
+          echo "KERNEL_BRANCH=lineage-22.2" >> $GITHUB_ENV
         fi
 
     - name: Install Dependencies
