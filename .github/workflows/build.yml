@@ -64,7 +64,7 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt update
-        sudo apt install -y device-tree-compiler bc build-essential flex bison libssl-dev libelf-dev clang lld wget python3 python-is-python3 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi zip libtinfo5
+        sudo apt install -y device-tree-compiler bc build-essential flex bison libssl-dev libelf-dev clang lld wget python3 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi zip
         mkdir -p ${{ env.ARTIFACT }}
 
     - name: Fetch Kernel Source
