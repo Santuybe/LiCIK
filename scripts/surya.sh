@@ -13,8 +13,10 @@ AK3_DIR="$(pwd)/android/AnyKernel3"
 
 jules_ci_fixer() {
     echo "Running Jules CI-fixer..."
-    [ -f "scripts/dtc/dtc-lexer.lex.c_shipped" ] && sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.lex.c_shipped
-    find . -name Makefile -exec sed -i 's/-Werror//g' {} +
+    for f in scripts/dtc/dtc-lexer.lex.c_shipped scripts/dtc/dtc-lexer.c_shipped; do
+        [ -f "$f" ] && sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' "$f"
+    done
+    find . -name Makefile -exec sed -i 's/-Werror\( \|$\)//g' {} +
     echo "Jules CI-fixer completed."
 }
 
@@ -35,6 +37,7 @@ fi
 
 mkdir -p out
 make O=out ARCH=arm64 $DEFCONFIG
+make O=out ARCH=arm64 olddefconfig
 
 # Merge features if requested
 if [[ "$1" == "droidspace" ]]; then
