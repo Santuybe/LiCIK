@@ -23,7 +23,7 @@ AK3_DIR="$(pwd)/anykernel_boeffla-t0lte"
 if ! [ -d "$TC_DIR" ]; then
     echo "Downloading GCC 4.9 for ARM..."
     mkdir -p "$TC_DIR"
-    git clone --depth=1 https://github.com/android-linux-stable/gcc-arm-linux-gnueabi-4.9 "$TC_DIR"
+    git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 "$TC_DIR"
 fi
 
 export PATH="$TC_DIR/bin:$PATH"
@@ -35,20 +35,20 @@ if ! grep -q "^EXTRAVERSION =" Makefile; then
 fi
 
 mkdir -p out
-make O=out ARCH=arm CROSS_COMPILE=arm-linux-gnueabi- $DEFCONFIG
+make O=out ARCH=arm CROSS_COMPILE=arm-linux-androideabi- $DEFCONFIG
 
 # Merge features if requested
 if [[ "$1" == "droidspace" ]]; then
     scripts/kconfig/merge_config.sh -O out -m out/.config arch/arm/configs/droidspacest0lte.config arch/arm/configs/droidspaces.config arch/arm/configs/droidspaces-additional.config
-    make O=out ARCH=arm CROSS_COMPILE=arm-linux-gnueabi- olddefconfig
+    make O=out ARCH=arm CROSS_COMPILE=arm-linux-androideabi- olddefconfig
 elif [[ "$1" == "nethunter" ]]; then
     scripts/kconfig/merge_config.sh -O out -m out/.config arch/arm/configs/nethunter.config
-    make O=out ARCH=arm CROSS_COMPILE=arm-linux-gnueabi- olddefconfig
+    make O=out ARCH=arm CROSS_COMPILE=arm-linux-androideabi- olddefconfig
 fi
 
 echo -e "\nStarting compilation...\n"
 make -j$(nproc --all) O=out ARCH=arm \
-    CROSS_COMPILE=arm-linux-gnueabi- \
+    CROSS_COMPILE=arm-linux-androideabi- \
     zImage || exit $?
 
 kernel="out/arch/arm/boot/zImage"
@@ -67,7 +67,7 @@ if [ -f "$kernel" ]; then
     cp $kernel AnyKernel3/zImage
 
     cd AnyKernel3
-    echo "CiLIK Kernel - $DEVICE $FEAT build" > banner.new
+    echo "LiCIK Kernel - $DEVICE $FEAT build" > banner.new
     [ -f "banner" ] && cat banner >> banner.new
     mv banner.new banner
 
