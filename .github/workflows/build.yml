@@ -81,7 +81,16 @@ jobs:
         cd kernel_workspace
         if [[ "${{ github.event.inputs.feature }}" == "droidspace" ]]; then
           echo "Applying Droidspace patches..."
-          for p in ../patches/*-droidspace.patch; do
+          for p in ../patches/*.patch; do
+            # Skip device-specific patches if not for this device
+            if [[ "$p" == *"-t0lte.patch" ]] && [[ "${{ matrix.device }}" != "t0lte" ]]; then
+              continue
+            fi
+            # Skip generic version of a device-specific patch
+            if [[ "$p" == *"01-droidspace.patch" ]] && [[ "${{ matrix.device }}" == "t0lte" ]]; then
+              continue
+            fi
+
             echo "Applying $p..."
             patch -p1 --forward --batch < "$p" || echo "Failed: $p"
           done

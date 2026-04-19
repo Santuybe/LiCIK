@@ -1,0 +1,101 @@
+From 5011f9b440c8c4144473d9a26171fc8ecf59d059 Mon Sep 17 00:00:00 2001
+From: ravindu644 <droidcasts@protonmail.com>
+Date: Sun, 22 Feb 2026 22:24:27 +0530
+Subject: [PATCH] [PATCH 1/2] Droidspaces/LXC: fix: avoid kernel panic in
+ xt_qtaguid by removing unsafe dev_get_stats usage on inactive interfaces
+
+Signed-off-by: ravindu644 <droidcasts@protonmail.com>
+---
+ net/netfilter/xt_qtaguid.c | 20 +++++++-------------
+ 1 file changed, 7 insertions(+), 13 deletions(-)
+
+diff --git a/net/netfilter/xt_qtaguid.c b/net/netfilter/xt_qtaguid.c
+index 8cb9c30bf..bf4bd9f56 100755
+--- a/net/netfilter/xt_qtaguid.c
++++ b/net/netfilter/xt_qtaguid.c
+@@ -788,22 +788,14 @@ static int pp_iface_stat_line(bool header, char *outp,
+			       "tx_other_bytes tx_other_packets\n"
+			);
+	} else {
+-		struct rtnl_link_stats64 dev_stats, *stats;
++		struct rtnl_link_stats64 *stats;
++		struct rtnl_link_stats64 dev_stats;
+		__u64 rx_pkts, tx_pkts, rx_bytes, tx_bytes;
+		struct data_counters *cnts;
+		int cnt_set = 0;   /* We only use one set for the device */
+		cnts = &iface_entry->totals_via_skb;
+
+		if (iface_entry->active) {
+-			stats = dev_get_stats(iface_entry->net_dev, &dev_stats);
+-			rx_bytes = iface_entry->totals_via_dev[IFS_RX].bytes
+-					+ stats->rx_bytes;
+-			rx_pkts = iface_entry->totals_via_dev[IFS_RX].packets
+-					+ stats->rx_packets;
+-			tx_bytes = iface_entry->totals_via_dev[IFS_TX].bytes
+-					+ stats->tx_bytes;
+-			tx_pkts = iface_entry->totals_via_dev[IFS_TX].packets
+-					+ stats->tx_packets;
++			rx_bytes = iface_entry->totals_via_dev[IFS_RX].bytes;
++			rx_pkts = iface_entry->totals_via_dev[IFS_RX].packets;
++			tx_bytes = iface_entry->totals_via_dev[IFS_TX].bytes;
++			tx_pkts = iface_entry->totals_via_dev[IFS_TX].packets;
+		} else {
+			rx_bytes = iface_entry->totals_via_dev[IFS_RX].bytes;
+			rx_pkts = iface_entry->totals_via_dev[IFS_RX].packets;
+@@ -844,7 +836,8 @@ static int iface_stat_fmt_proc_read(char *page, char **num_items_returned,
+	int len;
+	int fmt = (int)data; /* The data is just 1 (old) or 2 (uses fmt) */
+	struct iface_stat *iface_entry;
+-	struct rtnl_link_stats64 dev_stats, *stats;
++	struct rtnl_link_stats64 *stats;
++	struct rtnl_link_stats64 dev_stats;
+	struct rtnl_link_stats64 no_dev_stats = {0};
+
+	if (unlikely(module_passive)) {
+@@ -883,12 +876,8 @@ static int iface_stat_fmt_proc_read(char *page, char **num_items_returned,
+		if (item_index++ < items_to_skip)
+			continue;
+
+-		if (iface_entry->active) {
+-			stats = dev_get_stats(iface_entry->net_dev,
+-					      &dev_stats);
+-		} else {
+-			stats = &no_dev_stats;
+-		}
++		stats = &no_dev_stats;
++
+		/*
+		 * If the meaning of the data changes, then update the fmtX
+		 * string.
+@@ -1036,10 +1025,11 @@ static void iface_check_stats_reset_and_adjust(struct net_device *net_dev,
+					       struct iface_stat *iface)
+ {
+-	struct rtnl_link_stats64 dev_stats, *stats;
++	struct rtnl_link_stats64 *stats;
++	struct rtnl_link_stats64 dev_stats;
+	bool stats_rewound;
+
+-	stats = dev_get_stats(net_dev, &dev_stats);
++	stats = &dev_stats;
++	memset(&dev_stats, 0, sizeof(dev_stats));
++
+	/* No empty packets */
+	stats_rewound =
+		(stats->rx_bytes < iface->last_known[IFS_RX].bytes)
+@@ -1257,10 +1247,11 @@ static void iface_stat_update(struct net_device *net_dev, bool stash_only)
+  */
+ static void iface_stat_update(struct net_device *net_dev, bool stash_only)
+ {
+-	struct rtnl_link_stats64 dev_stats, *stats;
++	struct rtnl_link_stats64 *stats;
++	struct rtnl_link_stats64 dev_stats;
+	struct iface_stat *entry;
+
+-	stats = dev_get_stats(net_dev, &dev_stats);
++	stats = &dev_stats;
++	memset(&dev_stats, 0, sizeof(dev_stats));
++
+	spin_lock_bh(&iface_stat_list_lock);
+	entry = get_iface_entry(net_dev->name);
+	if (entry == NULL) {
+--

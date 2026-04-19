@@ -18,7 +18,7 @@ esac
 ZIPNAME="LiCIK-${DEVICE}-${FEAT}-${DATE}.zip"
 
 TC_DIR="$(pwd)/tc/gcc-4.9-arm"
-AK3_DIR="$(pwd)/anykernel_boeffla-t0lte"
+AK3_DIR="$(pwd)/android/AnyKernel3"
 
 if ! [ -d "$TC_DIR" ]; then
     echo "Downloading GCC 4.9 for ARM..."
@@ -56,13 +56,15 @@ kernel="out/arch/arm/boot/zImage"
 if [ -f "$kernel" ]; then
     echo -e "\nKernel compiled successfully! Zipping up...\n"
 
-    # Use AnyKernel3 from source tree
+    rm -rf AnyKernel3
     if [ -d "$AK3_DIR" ]; then
         cp -r "$AK3_DIR" AnyKernel3
     else
-        echo "AnyKernel3 directory not found in source!"
-        exit 1
+        mkdir -p "$(dirname "$AK3_DIR")"
+        git clone -q https://github.com/osm0sis/AnyKernel3 "$AK3_DIR"
+        cp -r "$AK3_DIR" AnyKernel3
     fi
+    curl -Ls https://raw.githubusercontent.com/html6405/android_kernel_samsung_smdk4412/refs/heads/lineage-21.0/anykernel_boeffla-t0lte/anykernel.sh -o AnyKernel3/anykernel.sh
 
     cp $kernel AnyKernel3/zImage
 
