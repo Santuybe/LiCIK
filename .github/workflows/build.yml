@@ -69,7 +69,7 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt update
-        sudo apt install -y device-tree-compiler bc build-essential flex bison libssl-dev libelf-dev clang lld wget python3 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi zip libarchive-tools zstd
+        sudo apt install -y device-tree-compiler bc build-essential flex bison libssl-dev libelf-dev clang lld wget python3 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi zip unzip libarchive-tools zstd
         mkdir -p ${{ env.ARTIFACT }}
 
     - name: Fetch Kernel Source
@@ -81,7 +81,16 @@ jobs:
         cd kernel_workspace
         if [[ "${{ github.event.inputs.feature }}" == "droidspace" ]]; then
           echo "Applying Droidspace patches..."
-          for p in ../patches/*-droidspace.patch; do
+          for p in ../patches/*.patch; do
+            # Skip device-specific patches if not for this device
+            if [[ "$p" == *"-t0lte.patch" ]] && [[ "${{ matrix.device }}" != "t0lte" ]]; then
+              continue
+            fi
+            # Skip generic version of a device-specific patch
+            if [[ "$p" == *"01-droidspace.patch" ]] && [[ "${{ matrix.device }}" == "t0lte" ]]; then
+              continue
+            fi
+
             echo "Applying $p..."
             patch -p1 --forward --batch < "$p" || echo "Failed: $p"
           done
@@ -89,8 +98,13 @@ jobs:
 
     - name: Setup Configs
       run: |
-        mkdir -p kernel_workspace/arch/arm64/configs/
-        cp configs/*.config kernel_workspace/arch/arm64/configs/
+        if [[ "${{ matrix.device }}" == "t0lte" ]]; then
+          ARCH_DIR="arm"
+        else
+          ARCH_DIR="arm64"
+        fi
+        mkdir -p kernel_workspace/arch/$ARCH_DIR/configs/
+        cp configs/*.config kernel_workspace/arch/$ARCH_DIR/configs/
 
     - name: Building
       run: |
