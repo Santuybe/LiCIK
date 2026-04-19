@@ -5,9 +5,11 @@
 
 SECONDS=0
 DEVICE="surya"
+FEATURE="$1"
 DEFCONFIG="surya_defconfig"
 COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-ZIPNAME="LiCIK-${DEVICE}-${COMMIT_HASH}-$(date '+%Y%m%d-%H%M').zip"
+[ -z "$DATE" ] && DATE=$(date '+%Y%m%d%H%M')
+ZIPNAME="LiCIK-${DEVICE}-${FEATURE}-${COMMIT_HASH}-${DATE}.zip"
 TC_DIR="$(pwd)/tc/clang-498229"
 AK3_DIR="$(pwd)/android/AnyKernel3"
 
@@ -40,11 +42,23 @@ make O=out ARCH=arm64 $DEFCONFIG
 make O=out ARCH=arm64 olddefconfig
 
 # Merge features if requested
-if [[ "$1" == "droidspace" ]]; then
+if [[ "$FEATURE" == "droidspace" ]]; then
     scripts/kconfig/merge_config.sh -O out -m out/.config arch/arm64/configs/droidspaces.config arch/arm64/configs/droidspaces-additional.config
     make O=out ARCH=arm64 olddefconfig
-elif [[ "$1" == "nethunter" ]]; then
+elif [[ "$FEATURE" == "nethunter" ]]; then
     scripts/kconfig/merge_config.sh -O out -m out/.config arch/arm64/configs/nethunter.config
+    make O=out ARCH=arm64 olddefconfig
+fi
+
+# Enable KernelSU if present and not nethunter
+if [[ "$FEATURE" != "nethunter" ]] && [ -d "drivers/kernelsu" ]; then
+    echo "Enabling KernelSU..."
+    if [ -f "arch/arm64/configs/ksu.config" ]; then
+        scripts/kconfig/merge_config.sh -O out -m out/.config arch/arm64/configs/ksu.config
+    else
+        echo "ksu.config not found in arch/arm64/configs/! Enabling manually..."
+        echo "CONFIG_KSU=y" >> out/.config
+    fi
     make O=out ARCH=arm64 olddefconfig
 fi
 
@@ -76,7 +90,7 @@ if [ -f "$kernel" ]; then
     cp $kernel $dtb $dtbo AnyKernel3/ 2>/dev/null || cp $kernel AnyKernel3/
 
     cd AnyKernel3
-    echo "CiLIK Kernel - $DEVICE build" > banner.new
+    echo "CiLIK Kernel - $DEVICE ($FEATURE) build" > banner.new
     [ -f "banner" ] && cat banner >> banner.new
     mv banner.new banner
 

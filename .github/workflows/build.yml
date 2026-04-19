@@ -21,26 +21,46 @@ on:
           - normal
           - droidspace
           - nethunter
+          - all
 
 jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      devices: ${{ steps.set-devices.outputs.devices }}
+      date: ${{ steps.set-date.outputs.date }}
     steps:
+      - id: set-date
+        run: echo "date=$(TZ=Asia/Jakarta date +%Y%m%d%H%M)" >> $GITHUB_OUTPUT
       - id: set-matrix
         run: |
+          ALL_DEVICES='["surya", "msm8937"]'
+          ALL_FEATURES='["normal", "droidspace", "nethunter"]'
+
           if [[ "${{ github.event.inputs.device }}" == "all" ]]; then
-            echo 'matrix={"include":[{"device":"surya"},{"device":"msm8937"}]}' >> $GITHUB_OUTPUT
+            DEVICES=$ALL_DEVICES
           else
-            echo 'matrix={"include":[{"device":"${{ github.event.inputs.device }}"}]}' >> $GITHUB_OUTPUT
+            DEVICES="[\"${{ github.event.inputs.device }}\"]"
           fi
 
+          if [[ "${{ github.event.inputs.feature }}" == "all" ]]; then
+            FEATURES=$ALL_FEATURES
+          else
+            FEATURES="[\"${{ github.event.inputs.feature }}\"]"
+          fi
+
+          MATRIX=$(jq -nc --argjson devices "$DEVICES" --argjson features "$FEATURES" \
+            '{"include": (reduce ($devices[] | {device: .}) as $d ([]; . + (reduce ($features[] | {feature: .}) as $f ([]; . + [$d + $f]))))}')
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "devices=$DEVICES" >> $GITHUB_OUTPUT
+
   build_kernel:
-    name: Build LiCIK (${{ github.event.inputs.feature }}) for ${{ matrix.device }}
+    name: Build LiCIK (${{ matrix.feature }}) for ${{ matrix.device }}
     runs-on: ubuntu-latest
     needs: prepare
     strategy:
+      fail-fast: false
       matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
     permissions:
       contents: write
@@ -51,7 +71,7 @@ jobs:
 
     - name: Set Variables
       run: |
-        echo "DATE=$(TZ=Asia/Jakarta date +%Y%m%d%H%M)" >> $GITHUB_ENV
+        echo "DATE=${{ needs.prepare.outputs.date }}" >> $GITHUB_ENV
         echo "ARTIFACT=$GITHUB_WORKSPACE/artifact" >> $GITHUB_ENV
         if [[ "${{ matrix.device }}" == "surya" ]]; then
           echo "KERNEL_URL=https://github.com/crdroidandroid/android_kernel_xiaomi_surya.git" >> $GITHUB_ENV
@@ -71,10 +91,22 @@ jobs:
       run: |
         git clone --depth=1 -b ${{ env.KERNEL_BRANCH }} ${{ env.KERNEL_URL }} kernel_workspace
 
+    - name: KernelSU Integration
+      run: |
+        cd kernel_workspace
+        if [[ "${{ matrix.feature }}" != "nethunter" ]]; then
+          if [ ! -d "drivers/kernelsu" ]; then
+            echo "KernelSU not found, patching..."
+            curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
+          else
+            echo "KernelSU already exists."
+          fi
+        fi
+
     - name: Apply Patches
       run: |
         cd kernel_workspace
-        if [[ "${{ github.event.inputs.feature }}" == "droidspace" ]]; then
+        if [[ "${{ matrix.feature }}" == "droidspace" ]]; then
           echo "Applying Droidspace patches..."
           for p in ../patches/*-droidspace.patch; do
             echo "Applying $p..."
@@ -92,7 +124,7 @@ jobs:
         cp scripts/${{ matrix.device }}.sh kernel_workspace/build.sh
         cd kernel_workspace
         chmod +x build.sh
-        ./build.sh ${{ github.event.inputs.feature }}
+        ./build.sh ${{ matrix.feature }}
 
     - name: Extract Metadata
       id: metadata
@@ -102,29 +134,70 @@ jobs:
         PATCHLEVEL=$(grep "^PATCHLEVEL =" Makefile | awk '{print $3}')
         SUBLEVEL=$(grep "^SUBLEVEL =" Makefile | awk '{print $3}')
         EXTRAVERSION=$(grep "^EXTRAVERSION =" Makefile | awk '{print $3}')
-        echo "KV=$VERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION" >> $GITHUB_OUTPUT
+        KV="$VERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION"
         OWNER=$(echo "${{ env.KERNEL_URL }}" | sed -E 's/.*github.com\/([^\/]+).*/\1/')
+        echo "KV=$KV" >> $GITHUB_OUTPUT
         echo "OWNER=$OWNER" >> $GITHUB_OUTPUT
+        echo "KV=$KV" > metadata.txt
+        echo "OWNER=$OWNER" >> metadata.txt
+        echo "KERNEL_URL=${{ env.KERNEL_URL }}" >> metadata.txt
 
     - name: Move ZIP to Artifact
       run: |
         mv kernel_workspace/*.zip ${{ env.ARTIFACT }}/
+        mv kernel_workspace/metadata.txt ${{ env.ARTIFACT }}/metadata-${{ matrix.feature }}.txt
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: LiCIK-${{ matrix.device }}-${{ github.event.inputs.feature }}-${{ env.DATE }}
+        name: LiCIK-${{ matrix.device }}-${{ matrix.feature }}-${{ env.DATE }}
         path: ${{ env.ARTIFACT }}/*
+
+  release:
+    name: Create Release for ${{ matrix.device }}
+    runs-on: ubuntu-latest
+    needs: [prepare, build_kernel]
+    strategy:
+      matrix:
+        device: ${{ fromJson(needs.prepare.outputs.devices) }}
+    permissions:
+      contents: write
+    steps:
+    - name: Download all artifacts for this device
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+        pattern: LiCIK-${{ matrix.device }}-*
+        merge-multiple: true
+
+    - name: Get Metadata
+      id: metadata
+      run: |
+        # Use metadata from any feature, they should be similar enough for versioning
+        cat artifacts/metadata-*.txt | head -n 3 > final_metadata.txt
+        source final_metadata.txt
+        echo "KV=$KV" >> $GITHUB_OUTPUT
+        echo "OWNER=$OWNER" >> $GITHUB_OUTPUT
+        echo "KERNEL_URL=$KERNEL_URL" >> $GITHUB_OUTPUT
+
+    - name: Delete old release and tag
+      uses: dev-drprasad/delete-tag-and-release@v1.1
+      with:
+        tag_name: ${{ matrix.device }}
+        delete_release: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ matrix.device }}-${{ github.event.inputs.feature }}-${{ env.DATE }}
-        files: ${{ env.ARTIFACT }}/*
+        tag_name: ${{ matrix.device }}
+        name: LiCIK Kernel for ${{ matrix.device }}
+        files: artifacts/*.zip
         body: |
           ## 🔖 LiCIK Kernel for ${{ matrix.device }}
 
           - 🪪 **Author:** ${{ steps.metadata.outputs.OWNER }}
-          - 🎯 **Kernel Source:** ${{ env.KERNEL_URL }}
+          - 🎯 **Kernel Source:** ${{ steps.metadata.outputs.KERNEL_URL }}
           - 🧭 **Kernel Version:** ${{ steps.metadata.outputs.KV }}
-          - 📅 **Build Date:** ${{ env.DATE }}
+          - 📅 **Build Date:** ${{ needs.prepare.outputs.date }}
