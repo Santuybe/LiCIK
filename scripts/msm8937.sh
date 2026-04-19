@@ -116,7 +116,7 @@ if [ -n "$kernel" ]; then
     if [ -d "$AK3_DIR" ]; then
         cp -r $AK3_DIR AnyKernel3
     else
-        git clone -q https://github.com/surya-aosp/AnyKernel3 -b shinigami AnyKernel3
+        git clone -q https://github.com/mi-msm8937/AnyKernel3 -b mi8937 AnyKernel3
     fi
     cp $kernel AnyKernel3/Image.gz 2>/dev/null || cp $kernel AnyKernel3/
     [ -f "out/arch/arm64/boot/dtb.img" ] && cp "out/arch/arm64/boot/dtb.img" AnyKernel3/
