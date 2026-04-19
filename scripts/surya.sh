@@ -6,8 +6,17 @@
 SECONDS=0
 DEVICE="surya"
 DEFCONFIG="surya_defconfig"
-COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-ZIPNAME="LiCIK-${DEVICE}-${COMMIT_HASH}-$(date '+%Y%m%d-%H%M').zip"
+
+# Feature Name Mapping
+case "$1" in
+    "droidspace") FEAT="DS" ;;
+    "nethunter") FEAT="NH" ;;
+    *) FEAT="Base" ;;
+esac
+
+[ -z "$DATE" ] && DATE=$(date '+%Y%m%d%H%M')
+ZIPNAME="LiCIK-${DEVICE}-${FEAT}-${DATE}.zip"
+
 TC_DIR="$(pwd)/tc/clang-498229"
 AK3_DIR="$(pwd)/android/AnyKernel3"
 
