@@ -6,21 +6,23 @@ on:
       device:
         description: 'Select device'
         required: true
-        default: 'surya'
+        default: 'all'
         type: choice
         options:
           - surya
           - msm8937
+          - t0lte
           - all
       feature:
         description: 'Select build feature'
         required: true
-        default: 'normal'
+        default: 'base'
         type: choice
         options:
-          - normal
+          - base
           - droidspace
           - nethunter
+          - all
 
 jobs:
   prepare:
@@ -31,7 +33,7 @@ jobs:
       - id: set-matrix
         run: |
           if [[ "${{ github.event.inputs.device }}" == "all" ]]; then
-            echo 'matrix={"include":[{"device":"surya"},{"device":"msm8937"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"include":[{"device":"surya"},{"device":"msm8937"},{"device":"t0lte"}]}' >> $GITHUB_OUTPUT
           else
             echo 'matrix={"include":[{"device":"${{ github.event.inputs.device }}"}]}' >> $GITHUB_OUTPUT
           fi
@@ -59,6 +61,9 @@ jobs:
         elif [[ "${{ matrix.device }}" == "msm8937" ]]; then
           echo "KERNEL_URL=https://github.com/LineageOS/android_kernel_xiaomi_msm8937.git" >> $GITHUB_ENV
           echo "KERNEL_BRANCH=lineage-22.2" >> $GITHUB_ENV
+        elif [[ "${{ matrix.device }}" == "t0lte" ]]; then
+          echo "KERNEL_URL=https://github.com/html6405/android_kernel_samsung_smdk4412.git" >> $GITHUB_ENV
+          echo "KERNEL_BRANCH=lineage-21.0-3.0" >> $GITHUB_ENV
         fi
 
     - name: Install Dependencies
