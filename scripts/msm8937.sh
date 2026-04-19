@@ -90,7 +90,7 @@ make -j$(nproc --all) O=out ARCH=arm64 \
     STRIP=llvm-strip \
     CROSS_COMPILE=aarch64-none-linux-gnu- \
     CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
-    LLVM=1 LLVM_IAS=1 Image.gz dtb.img dtbo.img || \
+    LLVM=1 LLVM_IAS=1 Image.gz || \
 make -j$(nproc --all) O=out ARCH=arm64 \
     CC=clang \
     AS=clang \
