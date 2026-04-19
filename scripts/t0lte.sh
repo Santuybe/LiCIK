@@ -60,7 +60,9 @@ if [ -f "$kernel" ]; then
     if [ -d "$AK3_DIR" ]; then
         cp -r "$AK3_DIR" AnyKernel3
     else
-        git clone -q https://github.com/osm0sis/AnyKernel3 AnyKernel3
+        mkdir -p "$(dirname "$AK3_DIR")"
+        git clone -q https://github.com/osm0sis/AnyKernel3 "$AK3_DIR"
+        cp -r "$AK3_DIR" AnyKernel3
     fi
     curl -Ls https://raw.githubusercontent.com/html6405/android_kernel_samsung_smdk4412/refs/heads/lineage-21.0/anykernel_boeffla-t0lte/anykernel.sh -o AnyKernel3/anykernel.sh
 
