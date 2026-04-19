@@ -119,7 +119,7 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ matrix.device }}-${{ github.event.inputs.feature }}-${{ env.DATE }}
+        tag_name: ${{ matrix.device }}
         files: ${{ env.ARTIFACT }}/*
         body: |
           ## 🔖 LiCIK Kernel for ${{ matrix.device }}
